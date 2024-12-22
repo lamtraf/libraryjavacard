@@ -8,9 +8,9 @@ import javax.smartcardio.*;
 import javax.swing.*;
 
 public class Connect_CardJava extends JFrame {
-//    05 01 09 00 00 00
-    public static final byte[] AID_APPLET = {(byte) 0x05, (byte) 0x01, (byte) 0x09, (byte) 0x00, (byte) 0x00, (byte) 0x00};
-//    public static final byte[] AID_APPLET = {(byte) 0x00, (byte) 0x11, (byte) 0x22, (byte) 0x33, (byte) 0x44, (byte) 0x55};
+
+    public static final byte[] AID_APPLET = {(byte) 0x24, (byte) 0x02, (byte) 0x05, (byte) 0x01, (byte) 0x09, (byte) 0x00};
+
     private Card card;
     private TerminalFactory factory;
     private CardChannel channel;
@@ -24,27 +24,6 @@ public class Connect_CardJava extends JFrame {
     private JPanel contentPanel;
 
     public Connect_CardJava() {
-//        setTitle("TabBar Example");
-//        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-//        setSize(800, 600); // Kích thước cửa sổ
-//        setLocationRelativeTo(null); // Căn giữa màn hình
-//        setLayout(new BorderLayout());
-//
-//        // Tạo TabBar bên trái
-//        JPanel tabBar = createTabBar();
-//
-//        // Tạo nội dung hiển thị
-//        contentPanel = new JPanel();
-//        contentPanel.setBackground(new Color(255, 255, 255)); // Nền trắng
-//        contentPanel.setLayout(new BorderLayout());
-//        JLabel initialContent = new JLabel("Chào mừng! Hãy chọn một tab.");
-//        initialContent.setHorizontalAlignment(SwingConstants.CENTER);
-//        initialContent.setFont(new Font("Arial", Font.BOLD, 20));
-//        contentPanel.add(initialContent, BorderLayout.CENTER);
-//
-//        // Thêm TabBar và Content vào giao diện
-//        add(tabBar, BorderLayout.WEST);
-//        add(contentPanel, BorderLayout.CENTER);
 
         setVisible(true);
 

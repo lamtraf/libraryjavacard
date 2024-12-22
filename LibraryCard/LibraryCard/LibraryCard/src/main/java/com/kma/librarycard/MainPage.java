@@ -10,8 +10,10 @@ import java.io.UnsupportedEncodingException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Date;
 import javax.smartcardio.Card;
 import javax.smartcardio.CardChannel;
 import javax.smartcardio.CardException;
@@ -283,8 +285,98 @@ public class MainPage extends JFrame {
         }
     }
 
-    private String getUserNameFromCard() {
-        String name = "";
+//  private String getUserNameFromCard() {
+//    String name = "";
+//    try {
+//        // Kết nối đến thẻ
+//        TerminalFactory factory = TerminalFactory.getDefault();
+//        CardTerminals terminals = factory.terminals();
+//        if (terminals.list().isEmpty()) {
+//            JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
+//            return name;  // Thêm return ở đây để tránh tiếp tục nếu không tìm thấy thẻ
+//        }
+//        CardTerminal terminal = terminals.list().get(0);
+//        Card card = terminal.connect("T=0");
+//        CardChannel channel = card.getBasicChannel();
+//
+//        // Gửi lệnh APDU để chọn ứng dụng của thẻ
+//        CommandAPDU getNameCommand = new CommandAPDU(0xA4, 0x15, 0x00, 0x00, new byte[]{}, 0x0F);
+//
+//        ResponseAPDU nameResponse = channel.transmit(getNameCommand);
+//
+//        if (nameResponse.getSW() == 0x9000) {
+//            byte[] data = nameResponse.getData();
+//            System.out.println("Dữ liệu nhận được từ thẻ: " + Arrays.toString(data));
+//
+//            // Chuyển mảng byte thành chuỗi UTF-8 và xử lý chuỗi
+//            name = new String(data, "UTF-8");
+//
+//            // Loại bỏ khoảng trắng ở đầu và cuối chuỗi
+//            name = name.trim();
+//
+//        } else {
+//            JOptionPane.showMessageDialog(this, "Không thể đọc tên từ thẻ.");
+//        }
+//    } catch (CardException e) {
+//        JOptionPane.showMessageDialog(this, "Lỗi khi kết nối với thẻ.");
+//        e.printStackTrace();
+//    } catch (UnsupportedEncodingException e) {
+//        JOptionPane.showMessageDialog(this, "Lỗi giải mã dữ liệu từ thẻ.");
+//        e.printStackTrace();
+//    }
+//    return name;
+//}
+// public String getUserDOBFromCard() {
+//        String dob = "";
+//        try {
+//            // Kết nối đến thẻ
+//            TerminalFactory factory = TerminalFactory.getDefault();
+//            CardTerminals terminals = factory.terminals();
+//            if (terminals.list().isEmpty()) {
+//                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
+//                return null;
+//            }
+//
+//            CardTerminal terminal = terminals.list().get(0);
+//            Card card = terminal.connect("T=0");
+//            CardChannel channel = card.getBasicChannel();
+//
+//            // Gửi lệnh APDU để chọn ứng dụng của thẻ và lấy dữ liệu ngày sinh
+//            CommandAPDU getDOBCommand = new CommandAPDU(0xA4, 0x17, 0x00, 0x00, new byte[]{}, 0x0F);  // Lệnh tùy chỉnh
+//            ResponseAPDU dobResponse = channel.transmit(getDOBCommand);
+//
+//            if (dobResponse.getSW() == 0x9000) {
+//                byte[] data = dobResponse.getData();
+//                System.out.println("Dữ liệu nhận được từ thẻ: " + Arrays.toString(data));
+//
+//                // Giả sử dữ liệu ngày sinh từ thẻ là định dạng YYYY-MM-DD
+//                 dob = new String(data, "UTF-8");
+//                
+//                
+//
+//                // Kiểm tra và chuyển đổi định dạng ngày sinh nếu cần thiết
+//               
+//            } else {
+//                JOptionPane.showMessageDialog(null, "Không thể đọc ngày sinh từ thẻ.");
+//            }
+//        } catch (CardException e) {
+//            JOptionPane.showMessageDialog(null, "Lỗi khi kết nối với thẻ.");
+//            e.printStackTrace();
+//        } catch (UnsupportedEncodingException e) {
+//            JOptionPane.showMessageDialog(null, "Lỗi giải mã dữ liệu từ thẻ.");
+//            e.printStackTrace();
+//        } catch (Exception e) {
+//            JOptionPane.showMessageDialog(null, "Lỗi xử lý ngày sinh.");
+//            e.printStackTrace();
+//        }
+//        return dob;
+//    }
+
+
+
+
+    private String getInfoCard() {
+        String chuoiByte = "";
         try {
             // Kết nối đến thẻ
             TerminalFactory factory = TerminalFactory.getDefault();
@@ -298,14 +390,14 @@ public class MainPage extends JFrame {
             CardChannel channel = card.getBasicChannel();
 
             // Gửi lệnh APDU để chọn ứng dụng của thẻ
-            CommandAPDU getNameCommand = new CommandAPDU(0xA4, 0x15, 0x00, 0x00, new byte[]{}, 0x0F);
+            CommandAPDU getNameCommand = new CommandAPDU(0xA4, 0x16, 0x00, 0x00);
 
             ResponseAPDU nameResponse = channel.transmit(getNameCommand);
 
             if (nameResponse.getSW() == 0x9000) {
                 byte[] data = nameResponse.getData();
                 System.out.println("Dữ liệu nhận được từ thẻ: " + Arrays.toString(data));
-                name = new String(data, "UTF-8");
+                chuoiByte = new String(data, "UTF-8");
             } else {
                 JOptionPane.showMessageDialog(this, "Không thể đọc tên từ thẻ.");
             }
@@ -316,100 +408,141 @@ public class MainPage extends JFrame {
             JOptionPane.showMessageDialog(this, "Lỗi giải mã dữ liệu từ thẻ.");
             e.printStackTrace();
         }
-        return name;
+        return chuoiByte;
     }
-
-    private String getUserDOBFromCard() {
-        String dob = "";
-        try {
-            // Kết nối đến thẻ
-            TerminalFactory factory = TerminalFactory.getDefault();
-            CardTerminals terminals = factory.terminals();
-            if (terminals.list().isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
-
-            }
-            CardTerminal terminal = terminals.list().get(0);
-            Card card = terminal.connect("T=0");
-            CardChannel channel = card.getBasicChannel();
-
-            // Gửi lệnh APDU để chọn ứng dụng của thẻ
-            CommandAPDU getNameCommand = new CommandAPDU(0xA4, 0x16, 0x00, 0x00, new byte[]{}, 0x0F);
-
-            ResponseAPDU nameResponse = channel.transmit(getNameCommand);
-
-            if (nameResponse.getSW() == 0x9000) {
-                byte[] data = nameResponse.getData();
-                System.out.println("Dữ liệu nhận được từ thẻ: " + Arrays.toString(data));
-                dob = new String(data, "UTF-8");
-            } else {
-                JOptionPane.showMessageDialog(this, "Không thể đọc tên từ thẻ.");
-            }
-        } catch (CardException e) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi kết nối với thẻ.");
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
-            JOptionPane.showMessageDialog(this, "Lỗi giải mã dữ liệu từ thẻ.");
-            e.printStackTrace();
+    
+    
+    
+private boolean updateUserNameWithExtendedAPDU(String ID , String Name , String Address  , String phone , String Pin ) {
+    try {
+        // Kết nối đến thẻ
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        
+        if (terminals.list().isEmpty()) {
+            JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
+            return false;
         }
-        return dob;
-    }
+        
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=0");
+        CardChannel channel = card.getBasicChannel();
+        
+        ID = ID.trim(); 
+        Name = Name.trim(); 
+        Address = Address.trim(); 
+        phone = phone.trim(); 
+        Pin = Pin.trim(); 
 
-    private String getUserIDFromCard() {
-        String id = "";
-        try {
-            // Kết nối đến thẻ
-            TerminalFactory factory = TerminalFactory.getDefault();
-            CardTerminals terminals = factory.terminals();
-            if (terminals.list().isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
+        // Chuyển dữ liệu UserID sang byte array
+        byte[] userIDBytes = ID.getBytes("UTF-8");
+        byte[] userNameBytes = Name.getBytes("UTF-8");
+        byte[] AddressBytes = Address.getBytes("UTF-8");
+        byte[] PhoneBytes = phone.getBytes("UTF-8");
+        byte[] PinBytes = Pin.getBytes("UTF-8");
+        
+        
+                // Tính tổng số byte cần thiết
+        int totalLength = userIDBytes.length + userNameBytes.length + AddressBytes.length +
+                          PhoneBytes.length + PinBytes.length + 4 * 1; // 4 lần 1 byte cho các dấu phân cách 0x03
 
-            }
-            CardTerminal terminal = terminals.list().get(0);
-            Card card = terminal.connect("T=0");
-            CardChannel channel = card.getBasicChannel();
+        // Tạo mảng byte mới đủ chứa tất cả các mảng byte và dấu phân cách
+        byte[] combinedBytes = new byte[totalLength];
 
-            // Gửi lệnh APDU để chọn ứng dụng của thẻ
-            CommandAPDU getNameCommand = new CommandAPDU(0xA4, 0x17, 0x00, 0x00, new byte[]{}, 0x0F);
+        // Chèn mảng byte vào và thêm dấu phân cách 0x03
+        int currentIndex = 0;
 
-            ResponseAPDU nameResponse = channel.transmit(getNameCommand);
+        System.arraycopy(userIDBytes, 0, combinedBytes, currentIndex, userIDBytes.length);
+        currentIndex += userIDBytes.length;
+        combinedBytes[currentIndex++] = 0x03; // Dấu phân cách
 
-            if (nameResponse.getSW() == 0x9000) {
-                byte[] data = nameResponse.getData();
-                System.out.println("Dữ liệu nhận được từ thẻ: " + Arrays.toString(data));
-                id = new String(data, "UTF-8");
-            } else {
-                JOptionPane.showMessageDialog(this, "Không thể đọc tên từ thẻ.");
-            }
-        } catch (CardException e) {
-            JOptionPane.showMessageDialog(this, "Lỗi khi kết nối với thẻ.");
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
-            JOptionPane.showMessageDialog(this, "Lỗi giải mã dữ liệu từ thẻ.");
-            e.printStackTrace();
+        System.arraycopy(userNameBytes, 0, combinedBytes, currentIndex, userNameBytes.length);
+        currentIndex += userNameBytes.length;
+        combinedBytes[currentIndex++] = 0x03;
+
+        System.arraycopy(AddressBytes, 0, combinedBytes, currentIndex, AddressBytes.length);
+        currentIndex += AddressBytes.length;
+        combinedBytes[currentIndex++] = 0x03;
+
+        System.arraycopy(PhoneBytes, 0, combinedBytes, currentIndex, PhoneBytes.length);
+        currentIndex += PhoneBytes.length;
+        combinedBytes[currentIndex++] = 0x03;
+        
+        System.arraycopy(PinBytes, 0, combinedBytes, currentIndex, PinBytes.length);
+        
+        System.out.println("aa");
+        
+        
+        
+        
+            // Tạo lệnh APDU mở rộng để ghi dữ liệu ngày sinh
+        CommandAPDU updateCommand = new CommandAPDU(0xA4, 0x11, 0x00, 0x00, combinedBytes, 0x00);
+
+        // Gửi lệnh đến thẻ
+        ResponseAPDU response = channel.transmit(updateCommand);
+
+
+        
+   
+
+        // Kiểm tra mã trạng thái
+        if (response.getSW() == 0x9000) {
+            JOptionPane.showMessageDialog(null, "Cập nhật User ID thành công.");
+            return true;
+        } else {
+            JOptionPane.showMessageDialog(null, "Không thể cập nhật User ID. Mã lỗi: " + Integer.toHexString(response.getSW()));
+            return false;
         }
-        return id;
+    } catch (CardException e) {
+        JOptionPane.showMessageDialog(null, "Lỗi khi kết nối với thẻ.");
+        e.printStackTrace();
+    } catch (UnsupportedEncodingException e) {
+        JOptionPane.showMessageDialog(null, "Lỗi mã hóa dữ liệu.");
+        e.printStackTrace();
     }
+    return false;
+}
 
     public static String encodeToBase64(byte[] byteArray) {
         return Base64.getEncoder().encodeToString(byteArray);
     }
 
-    private void switchTab(String appBarContent, String tabContent) {
-        String userName = getUserNameFromCard();
-        String userID = getUserIDFromCard();
-        String userDOB = getUserDOBFromCard();
+    public void switchTab(String appBarContent, String tabContent) {
+
+
+        String infoCard =getInfoCard();
+
+         String nameCard ="";
+       String idCard = "";
+        String addressCard = "";
+        String phoneCard= "";
+        String pinCard ="";
+        
+         String[] parts = infoCard.split("\u0003"); // \u0003 là ký tự phân cách 0x03
+
+        // Gán các phần đã tách vào các biến thông tin thẻ
+        if (parts.length == 4) {
+            idCard = parts[0];
+            nameCard = parts[1];      // Họ và tên
+            addressCard = parts[2];   // Địa chỉ
+            phoneCard = parts[3];     // Số điện thoại
+//            pinCard = parts[4];       // Mã PIN
+        }else{
+        System.out.println("Dữ liệu thẻ không hợp lệ.");
+    return; // Dừng phương thức nếu dữ liệu không hợp lệ
+        }
+        
+    // In ra các giá trị sau khi tách chuỗi
+    System.out.println("idCard: " + idCard);
+    System.out.println("nameCard: " + nameCard);
+    System.out.println("addressCard: " + addressCard);
+    System.out.println("phoneCard: " + phoneCard);
+    System.out.println("pinCard: " + pinCard);
+
+        
         if (rightAppBar != null) {
             rightAppBar.removeAll();
-//            JLabel newAppBarTitle = new JLabel(appBarContent);
-//            newAppBarTitle.setFont(new Font("Arial", Font.PLAIN, 14));
-//            newAppBarTitle.setForeground(Color.RED);
-//
-//            rightAppBar.add(newAppBarTitle);
-
             contentPanel.removeAll();
-
-            // Nếu là tab "Thông tin cá nhân", hiển thị giao diện đặc biệt
             switch (appBarContent) {
                 case "Thông tin cá nhân":
                     JPanel profilePanel = new JPanel();
@@ -426,7 +559,6 @@ public class MainPage extends JFrame {
                     avatarLabel.setHorizontalAlignment(SwingConstants.CENTER);
                     avatarLabel.setVerticalAlignment(SwingConstants.CENTER);
 
-                    // Thiết lập văn bản mặc định
                     avatarLabel.setText("Ảnh đại diện");
                     avatarLabel.setFont(new Font("Arial", Font.BOLD, 14));
 
@@ -482,13 +614,15 @@ public class MainPage extends JFrame {
                     // Thông tin cá nhân
                     JPanel infoPanel = new JPanel();
                     infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
-                    JLabel nameLabel = new JLabel("Họ và tên: " + userName);
-                    JLabel dobLabel = new JLabel("Ngày sinh: " + userDOB);
-                    JLabel idLabel = new JLabel("Mã thẻ: " + userID);
-                    nameLabel.setFont(new Font("Arial", Font.PLAIN, 16));
-                    dobLabel.setFont(new Font("Arial", Font.PLAIN, 16));
-                    idLabel.setFont(new Font("Arial", Font.PLAIN, 16));
-//                    
+                    JLabel idLabel = new JLabel("Mã thẻ: " + idCard);
+                    JLabel nameLabel = new JLabel("Họ và tên: " + nameCard);
+                    JLabel addressLabel = new JLabel("Địa chỉ: " + addressCard);
+                    JLabel phoneLabel = new JLabel("Số điện thoại: " + phoneCard);
+                    
+                infoPanel.add(idLabel);
+                infoPanel.add(nameLabel);
+                infoPanel.add(addressLabel);
+                infoPanel.add(phoneLabel);
 
                     //                   Thêm từ đây
                     // Thêm nút "Cập nhật thông tin" vào infoPanel
@@ -500,53 +634,72 @@ public class MainPage extends JFrame {
                     updateButton.setFocusPainted(false); // Loại bỏ viền khi chọn nút
 
 // Gắn sự kiện cho nút
-                    updateButton.addActionListener(e -> {
-                        // Tạo một JDialog để cập nhật thông tin
-                        JDialog updateDialog = new JDialog((Frame) null, "Cập nhật thông tin", true);
-                        updateDialog.setLayout(new GridLayout(4, 2, 10, 10));
-                        updateDialog.setSize(400, 200);
+updateButton.addActionListener(e -> {
+    // Tạo một JDialog để cập nhật thông tin
+    JDialog updateDialog = new JDialog((Frame) null, "Cập nhật thông tin", true);
+    updateDialog.setLayout(new GridLayout(6, 2, 10, 10)); // Điều chỉnh số dòng và cột
+    updateDialog.setSize(400, 300); // Thay đổi kích thước cho phù hợp
 
-                        // Các trường thông tin
-                        JLabel nameLabelDialog = new JLabel("Họ và tên:");
-                        JTextField nameField = new JTextField(""+userName);
-                        JLabel dobLabelDialog = new JLabel("Ngày sinh:");
-                        JTextField dobField = new JTextField("" + userDOB);
-                        JLabel idLabelDialog = new JLabel("Mã thẻ:");
-                        JTextField idField = new JTextField(userID);
-                        nameLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
-                        dobLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
-                        idLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
-                        // Nút lưu
-                        JButton saveButton = new JButton("Lưu");
-                        saveButton.addActionListener(saveEvent -> {
-                            // Lấy dữ liệu từ các trường và cập nhật thông tin
-                            String updatedName = nameField.getText();
-                            String updatedDob = dobField.getText();
-                            String updatedId = idField.getText();
+    // Các trường thông tin
+    JLabel nameLabelDialog = new JLabel("Họ và tên:");
+    JTextField nameField = new JTextField();
+    JLabel addressLabelDialog = new JLabel("Địa chỉ:");
+    JTextField addressField = new JTextField(); // Trường địa chỉ
+    JLabel phoneLabelDialog = new JLabel("Số điện thoại:");
+    JTextField phoneField = new JTextField(); // Trường số điện thoại
+    JLabel pinLabelDialog = new JLabel("Mã PIN:");
+    JTextField pinField = new JTextField(); // Trường mã PIN
+    JLabel idLabelDialog = new JLabel("ID thẻ:");
+    JTextField idField = new JTextField(); // Trường ID thẻ
 
-                            // Cập nhật các JLabel trong infoPanel
-                            nameLabel.setText("Họ và tên: " + updatedName);
-                            dobLabel.setText("Ngày sinh: " + updatedDob);
-                            idLabel.setText("Mã thẻ: " + updatedId);
+    // Đặt khoảng cách cho các nhãn
+    nameLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
+    addressLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
+    phoneLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
+    pinLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
+    idLabelDialog.setBorder(BorderFactory.createEmptyBorder(0, 25, 0, 0));
 
-                            // Đóng dialog
-                            updateDialog.dispose();
-                        });
+    // Nút lưu
+    JButton saveButton = new JButton("Lưu");
+    saveButton.addActionListener(saveEvent -> {
+        // Lấy dữ liệu từ các trường và cập nhật thông tin
+        String updatedName = nameField.getText();
+        String updatedAddress = addressField.getText();
+        String updatedPhone = phoneField.getText();
+        String updatedPin = pinField.getText();
+        String updatedId = idField.getText();
+        
+       Boolean isUpdate = updateUserNameWithExtendedAPDU(updatedId,updatedName,updatedAddress,updatedPhone,updatedPin);
 
-                        // Thêm các thành phần vào dialog
-                        updateDialog.add(nameLabelDialog);
-                        updateDialog.add(nameField);
-                        updateDialog.add(dobLabelDialog);
-                        updateDialog.add(dobField);
-                        updateDialog.add(idLabelDialog);
-                        updateDialog.add(idField);
-                        updateDialog.add(new JLabel()); // Placeholder
-                        updateDialog.add(saveButton);
+        // Cập nhật các JLabel trong infoPanel
+        nameLabel.setText("Họ và tên: " + updatedName);
+        addressLabel.setText("Địa chỉ: " + updatedAddress);
+        phoneLabel.setText("Số điện thoại: " + updatedPhone);
+        pinField.setText("Mã PIN: " + updatedPin);
+        idLabel.setText("ID thẻ: " + updatedId);
 
-                        // Hiển thị dialog
-                        updateDialog.setLocationRelativeTo(null);
-                        updateDialog.setVisible(true);
-                    });
+        // Đóng dialog
+        updateDialog.dispose();
+    });
+
+    // Thêm các thành phần vào dialog
+    updateDialog.add(nameLabelDialog);
+    updateDialog.add(nameField);
+    updateDialog.add(addressLabelDialog);
+    updateDialog.add(addressField);
+    updateDialog.add(phoneLabelDialog);
+    updateDialog.add(phoneField);
+    updateDialog.add(pinLabelDialog);
+    updateDialog.add(pinField);
+    updateDialog.add(idLabelDialog);
+    updateDialog.add(idField);
+    updateDialog.add(new JLabel()); // Placeholder cho vị trí trống
+    updateDialog.add(saveButton);
+
+    // Hiển thị dialog
+    updateDialog.setLocationRelativeTo(null); // Đặt vị trí cửa sổ ở giữa màn hình
+    updateDialog.setVisible(true);
+});
 
 // Thêm nút vào infoPanel
                     infoPanel.add(Box.createRigidArea(new Dimension(0, 20))); // Khoảng cách
@@ -555,9 +708,13 @@ public class MainPage extends JFrame {
 //                    Kết thúc
                     infoPanel.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 0));
                     infoPanel.add(Box.createRigidArea(new Dimension(0, 0))); // Khoảng cách trên
+                    infoPanel.add(idLabel);
+                    infoPanel.add(Box.createRigidArea(new Dimension(0, 0))); // Khoảng cách trên
                     infoPanel.add(nameLabel);
                     infoPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Khoảng cách giữa các dòng
-                    infoPanel.add(dobLabel);
+                    infoPanel.add(addressLabel);
+                    infoPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Khoảng cách giữa các dòng
+                    infoPanel.add(phoneLabel);
                     infoPanel.add(Box.createRigidArea(new Dimension(0, 10))); // Khoảng cách giữa các dòng
                     infoPanel.add(idLabel);
 
