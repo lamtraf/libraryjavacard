@@ -101,7 +101,7 @@ public class Connect_CardJava extends JFrame {
         // Giả lập kết nối thẻ (thời gian trễ 2 giây)
         new Thread(() -> {
             try {
-                Thread.sleep(2000); // Giả lập thời gian kết nối
+                Thread.sleep(10000); // Giả lập thời gian kết nối
                 SwingUtilities.invokeLater(() -> {
                     boolean connected = connectToCard();
                     if (connected) {
@@ -133,7 +133,7 @@ public class Connect_CardJava extends JFrame {
             factory = TerminalFactory.getDefault();
             terminals = factory.terminals().list();
             terminal = terminals.get(0);
-            card = terminal.connect("T=0");
+            card = terminal.connect("T=1");
             channel = card.getBasicChannel();
             if (channel == null) {
                 return false;
