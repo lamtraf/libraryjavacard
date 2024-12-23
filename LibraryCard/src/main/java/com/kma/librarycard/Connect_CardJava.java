@@ -101,7 +101,7 @@ public class Connect_CardJava extends JFrame {
         // Giả lập kết nối thẻ (thời gian trễ 2 giây)
         new Thread(() -> {
             try {
-                Thread.sleep(10000); // Giả lập thời gian kết nối
+                Thread.sleep(2000); // Giả lập thời gian kết nối
                 SwingUtilities.invokeLater(() -> {
                     boolean connected = connectToCard();
                     if (connected) {

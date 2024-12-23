@@ -19,7 +19,9 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
 import javax.smartcardio.Card;
 import javax.smartcardio.CardChannel;
 import javax.smartcardio.CardException;
@@ -42,6 +44,11 @@ public class MainPage extends JFrame {
 //    private List<CardTerminal> terminal;
     private Card card; // Giữ kết nối thẻ
     private CardChannel channel;
+    private String validatedOtp = "";
+
+    public void setValidatedOtp(String validatedOtp) {
+        this.validatedOtp = validatedOtp;
+    }
 
     public MainPage() {
         setTitle("Trang chủ");
@@ -137,7 +144,7 @@ public class MainPage extends JFrame {
         JButton tab3 = createTabButtonWithIcon("Mượn trả sách", "src/main/java/image/book.png");
         JButton tab4 = createTabButtonWithIcon("Thanh toán", "src/main/java/image/payment.png");
         JButton tab5 = createTabButtonWithIcon("Lịch sử hoạt động", "src/main/java/image/history.png");
-        JButton tab6 = createTabButtonWithIcon("Thay đổi OTP", "src/main/java/image/history.png");
+        JButton tab6 = createTabButtonWithIcon("Thay đổi mã pin", "src/main/java/image/history.png");
 
         // Gắn sự kiện
         tab1.addActionListener(e -> switchTab("Trang chủ", "Đây là nội dung Tab 1"));
@@ -145,7 +152,7 @@ public class MainPage extends JFrame {
         tab3.addActionListener(e -> switchTab("Mượn trả sách", "Đây là nội dung Tab 3"));
         tab4.addActionListener(e -> switchTab("Thanh toán", "Đây là nội dung Tab 4"));
         tab5.addActionListener(e -> switchTab("Lịch sử hoạt động", "Đây là nội dung Tab 5"));
-        tab6.addActionListener(e -> switchTab("Thay đổi OTP", "Đây là nội dung Tab đổi OTP"));
+        tab6.addActionListener(e -> switchTab("Thay đổi mã pin", "Đây là nội dung Tab đổi OTP"));
 
         tabBar.add(tab1);
         tabBar.add(tab2);
@@ -218,83 +225,92 @@ public class MainPage extends JFrame {
         }
     }
 
-    private byte[] convertImageToBytes(File imageFile) throws IOException {
-        // Đọc file hình ảnh vào mảng byte
-        FileInputStream fis = new FileInputStream(imageFile);
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int bytesRead;
+    private byte[] compressImage(File imageFile) {
+        try {
+            // Load original image
+            BufferedImage originalImage = ImageIO.read(imageFile);
 
-        while ((bytesRead = fis.read(buffer)) != -1) {
-            baos.write(buffer, 0, bytesRead);
+            // Resize image to a smaller size (e.g., reduce to 5% of original size)
+            int scaledWidth = originalImage.getWidth() / 5; // Giảm kích thước
+            int scaledHeight = originalImage.getHeight() / 5;
+            BufferedImage resizedImage = new BufferedImage(scaledWidth, scaledHeight, BufferedImage.TYPE_INT_RGB);
+
+            // Vẽ lại ảnh với kích thước mới
+            Graphics2D g2d = resizedImage.createGraphics();
+            g2d.drawImage(originalImage, 0, 0, scaledWidth, scaledHeight, null);
+            g2d.dispose();
+
+            // Tạo ByteArrayOutputStream để lưu ảnh dạng byte
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+            // Tìm ImageWriter cho định dạng JPG
+            javax.imageio.ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+
+            // Cài đặt nén ảnh
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(0.5f); // Mức nén: 50%
+
+            // Ghi ảnh vào ByteArrayOutputStream
+            writer.setOutput(ImageIO.createImageOutputStream(bos));
+            writer.write(null, new IIOImage(resizedImage, null, null), param);
+            writer.dispose();
+
+            System.out.println(bos);
+
+            // Trả về mảng byte của ảnh đã xử lý
+            return bos.toByteArray();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Error while processing image: " + e.getMessage());
+            e.printStackTrace();
+            return null; // Trả về null nếu có lỗi xảy ra
         }
-
-        // Đảm bảo đóng stream sau khi sử dụng
-        fis.close();
-        baos.close();
-
-        return baos.toByteArray();
     }
 
-// Giả sử bạn có một phương thức để gửi mảng byte tới Smart Card
-    private boolean sendToSmartCard(byte[] imageBytes) {
-        try {
-            // Kết nối đến thẻ
-            TerminalFactory factory = TerminalFactory.getDefault();
-            CardTerminals terminals = factory.terminals();
-            if (terminals.list().isEmpty()) {
-                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
-                return false;
-            }
+private boolean sendToSmartCard(byte[] imageBytes) {
+    try {
+    TerminalFactory factory = TerminalFactory.getDefault();
+    CardTerminal terminal = factory.terminals().list().get(0);
+    Card card = terminal.connect("T=1");
+    CardChannel channel = card.getBasicChannel();
 
-            CardTerminal terminal = terminals.list().get(0);
-            Card card = terminal.connect("T=1");
-            CardChannel channel = card.getBasicChannel();
+    int chunkSize = 255;
+    int offset = 0;
 
-            // Xác định kích thước tối đa của APDU
-            int maxApduSize = 2048; // Thẻ thường hỗ trợ tối đa 255 byte mỗi lần
-            int offset = 0;
+    // Gửi từng mảnh dữ liệu
+    while (offset < imageBytes.length) {
+        int length = Math.min(chunkSize, imageBytes.length - offset);
+        byte[] chunk = new byte[length];
+        System.arraycopy(imageBytes, offset, chunk, 0, length);
 
-            while (offset < imageBytes.length) {
-                // Tính toán kích thước phần dữ liệu cần gửi
-                int chunkSize = Math.min(maxApduSize, imageBytes.length - offset);
+        CommandAPDU command = new CommandAPDU(0xA4, 0x01, // INS_NHAP
+                (byte) (offset >> 8), (byte) (offset & 0xFF), chunk);
+        ResponseAPDU response = channel.transmit(command);
 
-                // Tạo lệnh Extended APDU (dữ liệu có thể lớn hơn 255 byte)
-                byte[] command = new byte[5 + chunkSize];  // 5 byte cho header
-                command[0] = (byte) 0xA4; // CLA: Class byte cho APDU mở rộng
-                command[1] = (byte) 0x05; // INS: Instruction byte (thay đổi nếu cần)
-                command[2] = (byte) 0x00; // P1: Parameter 1
-                command[3] = (byte) 0x00; // P2: Parameter 2
-                command[4] = (byte) chunkSize; // Lc: Độ dài dữ liệu (byte)
-
-                // Sao chép dữ liệu ảnh vào phần APDU
-                System.arraycopy(imageBytes, offset, command, 5, chunkSize);
-
-                // Gửi lệnh APDU
-                CommandAPDU apduCommand = new CommandAPDU(command);
-                ResponseAPDU response = channel.transmit(apduCommand);
-
-                // Kiểm tra phản hồi của thẻ
-                if (response.getSW() != 0x9000) {
-                    JOptionPane.showMessageDialog(null, "Lỗi từ thẻ: " + Integer.toHexString(response.getSW()));
-                    return false;
-                }
-
-                // Cập nhật offset để gửi phần tiếp theo
-                offset += chunkSize;
-            }
-
-            JOptionPane.showMessageDialog(null, "Dữ liệu đã được gửi thành công.");
-            return true;
-
-        } catch (CardException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "Lỗi kết nối thẻ: " + e.getMessage());
+        if (response.getSW() != 0x9000) {
+            System.out.println("Lỗi tại offset " + offset + ": " + Integer.toHexString(response.getSW()));
+            card.disconnect(false);
             return false;
         }
+
+        offset += length;
     }
-    
-    
+
+    // Gửi lệnh xuất để lấy dữ liệu
+    CommandAPDU exportCommand = new CommandAPDU(0xA4, 0x02, 0x00, 0x00, 0x0000); // INS_XUAT
+    ResponseAPDU exportResponse = channel.transmit(exportCommand);
+    byte[] receivedData = exportResponse.getData();
+    System.out.println("Dữ liệu trên thẻ: " + Arrays.toString(receivedData));
+
+    card.disconnect(false);
+    return true;
+} catch (CardException e) {
+    e.printStackTrace();
+    JOptionPane.showMessageDialog(null, "Lỗi kết nối thẻ: " + e.getMessage());
+    return false;
+}
+}
+
 
 
     private String getInfoCard() {
@@ -336,58 +352,49 @@ public class MainPage extends JFrame {
 
     public boolean uploadAvatar(byte[] data) {
         try {
-            // Kết nối đến thẻ
             TerminalFactory factory = TerminalFactory.getDefault();
             CardTerminals terminals = factory.terminals();
-
             if (terminals.list().isEmpty()) {
                 JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.");
-                return false;
+
             }
 
             CardTerminal terminal = terminals.list().get(0);
             Card card = terminal.connect("T=1");
             CardChannel channel = card.getBasicChannel();
+            // Kết nối đến terminal đầu tiên
 
-            // Chia dữ liệu thành các gói nhỏ
-            final int MAX_CHUNK_SIZE = 255; // Giới hạn dữ liệu cho T=0
-            int totalChunks = (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE;
-            int offset = 0;
+            // Tạo lệnh APDU để ghi dữ liệu
+            CommandAPDU updateCommand = new CommandAPDU(0xA4, 0x18, 0x00, 0x00, data);
 
-            // Gửi các gói dữ liệu đến thẻ
-            for (int i = 0; i < totalChunks; i++) {
-                // Tính kích thước gói hiện tại
-                int chunkLength = Math.min(MAX_CHUNK_SIZE, data.length - offset);
-                byte[] chunk = new byte[chunkLength];
-                System.arraycopy(data, offset, chunk, 0, chunkLength);
+            // Gửi lệnh đến thẻ
+            ResponseAPDU response = channel.transmit(updateCommand);
 
-                // Lệnh APDU để gửi gói dữ liệu
-                CommandAPDU commandAPDU = new CommandAPDU(0xA4, 0x18,
-                        (i == totalChunks - 1) ? 0x02 : 0x01, // P1: 0x02 cho gói cuối
-                        0x00, chunk);  // P2: 0x00 thường dùng cho dữ liệu
+            System.out.println(data);
 
-                // Gửi và nhận phản hồi từ thẻ
-                ResponseAPDU response = channel.transmit(commandAPDU);
-
-                // Kiểm tra phản hồi từ thẻ
-                if (response.getSW() != 0x9000) {
-                    JOptionPane.showMessageDialog(null, "Lỗi khi gửi gói " + (i + 1) + ". Mã lỗi: " + Integer.toHexString(response.getSW()));
-                    return false;
-                }
-
-                // Cập nhật offset để tiếp tục gửi các gói sau
-                offset += chunkLength;
+            // Kiểm tra mã trạng thái phản hồi
+            int sw = response.getSW();
+            if (sw == 0x9000) { // 0x9000 là mã trạng thái thành công
+                JOptionPane.showMessageDialog(null, "Cập nhật ảnh thành công.");
+                return true;
+            } else {
+                JOptionPane.showMessageDialog(null, "Lỗi từ thẻ: Mã trạng thái " + Integer.toHexString(sw));
             }
-
-            JOptionPane.showMessageDialog(null, "Cập nhật ảnh thành công.");
-            return true;
-
         } catch (CardException e) {
-            e.printStackTrace();
             JOptionPane.showMessageDialog(null, "Lỗi kết nối thẻ: " + e.getMessage());
-        } catch (Exception e) {
             e.printStackTrace();
+        } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Đã xảy ra lỗi: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            // Đảm bảo ngắt kết nối thẻ
+            if (card != null) {
+                try {
+                    card.disconnect(false);
+                } catch (CardException e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
         return false;
@@ -458,16 +465,15 @@ public class MainPage extends JFrame {
 
         return null;  // Nếu có lỗi, trả về null
     }
-    
-    
-     private BufferedImage byteArrayToImage(byte[] imageData) {
+
+    private BufferedImage byteArrayToImage(byte[] imageData) {
         try {
             // Chuyển mảng byte thành InputStream
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(imageData);
-            
+
             // Đọc ảnh từ InputStream
             BufferedImage image = ImageIO.read(byteArrayInputStream);
-            
+
             return image;
         } catch (IOException e) {
             e.printStackTrace();
@@ -560,6 +566,24 @@ public class MainPage extends JFrame {
     public static String encodeToBase64(byte[] byteArray) {
         return Base64.getEncoder().encodeToString(byteArray);
     }
+    
+     private byte[] convertImageToBytes(File imageFile) throws IOException {
+    // Đọc file hình ảnh vào mảng byte
+    FileInputStream fis = new FileInputStream(imageFile);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    
+    while ((bytesRead = fis.read(buffer)) != -1) {
+        baos.write(buffer, 0, bytesRead);
+    }
+    
+    // Đảm bảo đóng stream sau khi sử dụng
+    fis.close();
+    baos.close();
+
+    return baos.toByteArray();
+}
 
     public void switchTab(String appBarContent, String tabContent) {
 
@@ -572,11 +596,8 @@ public class MainPage extends JFrame {
         String pinCard = "";
 
         String byteImg = "";
-        
+
         BufferedImage imgCard = byteArrayToImage(infoIMGbyte);
-        
-        
-                
 
         System.out.println(infoIMGbyte);
 
@@ -629,6 +650,7 @@ public class MainPage extends JFrame {
                     avatarLabel.setHorizontalAlignment(SwingConstants.CENTER);
                     avatarLabel.setVerticalAlignment(SwingConstants.CENTER);
 
+                    // Thiết lập văn bản mặc định
                     avatarLabel.setText("Ảnh đại diện");
                     avatarLabel.setFont(new Font("Arial", Font.BOLD, 14));
 
@@ -643,31 +665,35 @@ public class MainPage extends JFrame {
 
                     // Thêm sự kiện cho nút "Thay đổi"
                     changeButton.addActionListener(e -> {
-                        // Mở JFileChooser để chọn ảnh
-                        JFileChooser fileChooser = new JFileChooser();
-                        fileChooser.setFileFilter(new FileNameExtensionFilter("Image files", "jpg", "jpeg", "png", "gif"));
-                        int result = fileChooser.showOpenDialog(null);
+                    // Mở JFileChooser để chọn ảnh
+                    JFileChooser fileChooser = new JFileChooser();
+                    fileChooser.setFileFilter(new FileNameExtensionFilter("Image files", "jpg", "jpeg", "png", "gif"));
+                    int result = fileChooser.showOpenDialog(null);
 
-                        if (result == JFileChooser.APPROVE_OPTION) {
-                            File selectedFile = fileChooser.getSelectedFile();
-                            try {
-                                // Tải ảnh từ file đã chọn
-                                ImageIcon avatarIcon = new ImageIcon(selectedFile.getAbsolutePath());
-                                Image scaledImage = avatarIcon.getImage().getScaledInstance(100, 120, Image.SCALE_SMOOTH);
-                                avatarLabel.setIcon(new ImageIcon(imgCard));
-                                avatarLabel.setText(null); // Xóa văn bản mặc định nếu có ảnh
+                    if (result == JFileChooser.APPROVE_OPTION) {
+                        File selectedFile = fileChooser.getSelectedFile();
+                        try {
+                            // Tải ảnh từ file đã chọn
+                            ImageIcon avatarIcon = new ImageIcon(selectedFile.getAbsolutePath());
+                            Image scaledImage = avatarIcon.getImage().getScaledInstance(100, 120, Image.SCALE_SMOOTH);
+                            avatarLabel.setIcon(new ImageIcon(scaledImage));
+                            avatarLabel.setText(null); // Xóa văn bản mặc định nếu có ảnh
 
-                                // Chuyển ảnh thành mảng byte
-                                byte[] imageBytes = convertImageToBytes(selectedFile);
-                                Boolean isUploadImg = uploadAvatar(imageBytes);
-                                System.out.println(isUploadImg);
-//                                sendToSmartCard(imageBytes);
+                            // Chuyển ảnh thành mảng byte
+                            byte[] imageBytes = convertImageToBytes(selectedFile);
+                            
+//                            String base64String = encodeToBase64(imageBytes);
 
-                            } catch (Exception ex) {
-                                JOptionPane.showMessageDialog(null, "Không thể tải ảnh: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-                            }
+//                            System.out.println("Base64 Encoded Image: " + base64String);
+
+                            // Gửi mảng byte xuống Smart Card (giả sử bạn có phương thức gửi)
+                            sendToSmartCard(imageBytes);
+
+                        } catch (Exception ex) {
+                            JOptionPane.showMessageDialog(null, "Không thể tải ảnh: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
                         }
-                    });
+                    }
+                });
 
                     // Panel chứa cả avatar và nút "Thay đổi"
                     JPanel avatarContainer = new JPanel();
@@ -736,7 +762,15 @@ public class MainPage extends JFrame {
                             String updatedPhone = phoneField.getText();
                             String updatedPin = pinField.getText();
                             String updatedId = idField.getText();
-
+                            if (!updatedPhone.matches("\\d{10}")) {
+                                JOptionPane.showMessageDialog(updateDialog, "Số điện thoại phải có đúng 10 chữ số.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                                return;
+                            }
+                            String correctOtp = validatedOtp; // Đây là mã OTP giả định, thay bằng mã thực tế của bạn
+                            if (!updatedPin.equals(correctOtp)) {
+                                JOptionPane.showMessageDialog(updateDialog, "Mã pin không chính xác.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                                return;
+                            }
                             Boolean isUpdate = updateUserNameWithExtendedAPDU(updatedId, updatedName, updatedAddress, updatedPhone, updatedPin);
 
                             // Cập nhật các JLabel trong infoPanel
@@ -1174,11 +1208,11 @@ public class MainPage extends JFrame {
                     contentPanel.revalidate();
                     contentPanel.repaint();
                     break;
-                case "Thay đổi OTP":
+                case "Thay đổi mã pin":
                     // Tạo panel chứa form
                     JPanel otpPanel = new JPanel();
                     otpPanel.setLayout(new BoxLayout(otpPanel, BoxLayout.Y_AXIS));  // Sử dụng BoxLayout để tiêu đề và form nằm gần nhau
-                    JLabel formTitle = new JLabel("Thay đổi OTP");
+                    JLabel formTitle = new JLabel("Thay đổi mã pin");
                     formTitle.setFont(new Font("Arial", Font.BOLD, 16));  // Căn chỉnh font và kiểu cho tiêu đề
                     formTitle.setForeground(new Color(0, 0, 0));  // Set màu chữ
                     formTitle.setAlignmentX(Component.CENTER_ALIGNMENT); // Căn giữa tiêu đề
@@ -1191,7 +1225,7 @@ public class MainPage extends JFrame {
                     gbc.anchor = GridBagConstraints.WEST;
 
                     // OTP Labels and Fields
-                    JLabel oldOtpLabel = new JLabel("OTP cũ:");
+                    JLabel oldOtpLabel = new JLabel("Mã pin cũ:");
                     oldOtpLabel.setFont(new Font("Arial", Font.PLAIN, 14));
 
                     JPasswordField oldOtpField = new JPasswordField(15);
@@ -1207,7 +1241,7 @@ public class MainPage extends JFrame {
                     otpFormPanel.add(oldOtpField, gbc);
 
                     // New OTP Label and Field
-                    JLabel newOtpLabel = new JLabel("OTP mới:");
+                    JLabel newOtpLabel = new JLabel("Mã pin mới:");
                     newOtpLabel.setFont(new Font("Arial", Font.PLAIN, 14));
 
                     JPasswordField newOtpField = new JPasswordField(15);
@@ -1223,7 +1257,7 @@ public class MainPage extends JFrame {
                     otpFormPanel.add(newOtpField, gbc);
 
                     // Confirm New OTP Label and Field
-                    JLabel newOtpConfirmLabel = new JLabel("Xác nhận OTP mới:");
+                    JLabel newOtpConfirmLabel = new JLabel("Xác nhận mã pin mới:");
                     newOtpConfirmLabel.setFont(new Font("Arial", Font.PLAIN, 14));
 
                     JPasswordField newOtpConfirmField = new JPasswordField(15);
@@ -1261,14 +1295,18 @@ public class MainPage extends JFrame {
                             String newOtp = new String(newOtpField.getPassword());
                             String newOtpConfirm = new String(newOtpConfirmField.getPassword());
 
-                            if (newOtp.isEmpty() || newOtpConfirm.isEmpty()) {
-                                JOptionPane.showMessageDialog(contentPanel, "OTP mới và xác nhận OTP mới không được để trống!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                            // Validate old OTP with the validatedOtp stored in checkOTPWithCard
+                            if (oldOtp.isEmpty() || newOtp.isEmpty() || newOtpConfirm.isEmpty()) {
+                                JOptionPane.showMessageDialog(contentPanel, "OTP fields cannot be empty!", "Error", JOptionPane.ERROR_MESSAGE);
                             } else if (!newOtp.equals(newOtpConfirm)) {
-                                JOptionPane.showMessageDialog(contentPanel, "OTP mới và xác nhận OTP mới không khớp!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                                JOptionPane.showMessageDialog(contentPanel, "New OTP and confirmation do not match!", "Error", JOptionPane.ERROR_MESSAGE);
                             } else if (oldOtp.equals(newOtp)) {
-                                JOptionPane.showMessageDialog(contentPanel, "OTP mới không được trùng với OTP cũ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                                JOptionPane.showMessageDialog(contentPanel, "New OTP cannot be the same as the old OTP!", "Error", JOptionPane.ERROR_MESSAGE);
+                            } else if (!oldOtp.equals(validatedOtp)) {
+                                JOptionPane.showMessageDialog(contentPanel, "Old OTP is incorrect!", "Error", JOptionPane.ERROR_MESSAGE);
                             } else {
-                                JOptionPane.showMessageDialog(contentPanel, "OTP đã được thay đổi thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                                validatedOtp = newOtp;
+                                JOptionPane.showMessageDialog(contentPanel, "OTP has been successfully changed!", "Success", JOptionPane.INFORMATION_MESSAGE);
                             }
                         }
                     });

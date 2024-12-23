@@ -124,6 +124,7 @@ public class OTPInput extends JFrame {
                 // Nếu OTP đúng, chuyển đến trang chính
                 MainPage mainPage = new MainPage();
                 mainPage.setVisible(true);
+                mainPage.setValidatedOtp(otp);
                 OTPInput.this.dispose();  // Đóng cửa sổ hiện tại
             } else {
                 // Nếu OTP sai quá 3 lần, vô hiệu hóa thẻ
@@ -228,7 +229,6 @@ public class OTPInput extends JFrame {
             return false;
         }
     }
-    
 
     // Hàm thêm logic tự động chuyển sang ô tiếp theo hoặc quay lại ô trước
     private void addAutoMove(JPasswordField currentField, JPasswordField previousField, JPasswordField nextField) {
