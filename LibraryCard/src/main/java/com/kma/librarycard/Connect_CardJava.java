@@ -9,7 +9,7 @@ import javax.swing.*;
 
 public class Connect_CardJava extends JFrame {
 
-    public static final byte[] AID_APPLET = {(byte) 0x24, (byte) 0x02, (byte) 0x05, (byte) 0x01, (byte) 0x09, (byte) 0x00};
+    public static final byte[] AID_APPLET = {(byte) 0x11, (byte) 0x22, (byte) 0x33, (byte) 0x44, (byte) 0x55, (byte) 0x01};
 
     private Card card;
     private TerminalFactory factory;
