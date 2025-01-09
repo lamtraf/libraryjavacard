@@ -32,7 +32,7 @@ public class BorrowReturnPanel extends JPanel {
     public static Object[][] fetchData(boolean isBorrowTable, ProfilePanel profilePanel) {
         String cardID = (profilePanel != null) ? profilePanel.card_id : null;
         String selectSQL = isBorrowTable
-                ? "SELECT name, ngay_muon, ngay_het_han, status, price FROM SACH_MUON_TRA WHERE ngay_tra IS NULL AND card_ID = ?"
+                ? "SELECT name, ngay_muon, ngay_het_han, status, price FROM SACH_MUON_TRA WHERE ngay_tra IS NULL AND card_id = ?"
                 : "SELECT id_sach, name FROM SACH";
 
         ArrayList<Object[]> dataList = new ArrayList<>();
@@ -72,7 +72,7 @@ public class BorrowReturnPanel extends JPanel {
     public static Object[][] fetchDataBorrowed(boolean isBorrowTable, ProfilePanel profilePanel) {
         String cardID = (profilePanel != null) ? profilePanel.card_id : null;
         String selectSQL = isBorrowTable && cardID != null
-                ? "SELECT b.name, b.price FROM book b LEFT JOIN sach_muon_tra s ON b.name = s.name WHERE s.name IS NULL OR s.card_ID != ?"
+                ? "SELECT b.name, b.price FROM book b LEFT JOIN sach_muon_tra s ON b.name = s.name WHERE s.name IS NULL OR s.card_id != ?"
                 : "SELECT name, price FROM book WHERE status = 1";
         ArrayList<Object[]> dataList = new ArrayList<>();
         try (Connection connection = DriverManager.getConnection(url, user, password); PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
@@ -230,6 +230,10 @@ public class BorrowReturnPanel extends JPanel {
             } else {
                 if (isBorrow) {
                     borrowBooks(selectedBooks);
+                    HistoryPanel.insertRecord("Mượn sách", "Thành công", profilePanel.card_id);
+                }
+                else{
+                HistoryPanel.insertRecord("Mượn sách", "Thất bại", profilePanel.card_id);
                 }
                 bookDialog.dispose();
             }
@@ -315,6 +319,7 @@ public class BorrowReturnPanel extends JPanel {
                 JOptionPane.showMessageDialog(bookDialog, "Vui lòng chọn ít nhất một sách.", "Lỗi", JOptionPane.ERROR_MESSAGE);
             } else {
                 returnBooks(selectedBooks);
+                HistoryPanel.insertRecord("Trả sách", "Thành công", profilePanel.card_id);
                 bookDialog.dispose();
             }
         });
@@ -331,7 +336,7 @@ public class BorrowReturnPanel extends JPanel {
     }
 
     private void borrowBooks(List<String> selectedBooks) {
-        String insertSQL = "INSERT INTO SACH_MUON_TRA (name, price, ngay_muon, ngay_het_han, status, card_ID) VALUES (?, ?, ?, ?, ?, ?)";
+        String insertSQL = "INSERT INTO SACH_MUON_TRA (name, price, ngay_muon, ngay_het_han, status, card_id) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DriverManager.getConnection(url, user, password); PreparedStatement preparedStatement = connection.prepareStatement(insertSQL)) {
             for (String selectedBook : selectedBooks) {
 
@@ -359,13 +364,12 @@ public class BorrowReturnPanel extends JPanel {
             updateMainTable();
         } catch (SQLException ex) {
             System.err.println("Lỗi khi mượn sách: " + ex.getMessage());
-            ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Lỗi khi mượn sách: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void returnBooks(List<String> selectedBooks) {
-        String updateSQL = "UPDATE SACH_MUON_TRA SET ngay_tra = ?, status = ? WHERE name = ? AND ngay_tra IS NULL AND card_ID = ?";
+        String updateSQL = "UPDATE SACH_MUON_TRA SET ngay_tra = ?, status = ? WHERE name = ? AND ngay_tra IS NULL AND card_id = ?";
         try (Connection connection = DriverManager.getConnection(url, user, password); PreparedStatement preparedStatement = connection.prepareStatement(updateSQL)) {
             for (String selectedBook : selectedBooks) {
                 String status = "Đã trả";

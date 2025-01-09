@@ -11,6 +11,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -19,35 +21,68 @@ import javax.swing.table.JTableHeader;
 public class HistoryPanel extends JPanel {
 
     private final JPanel contentPanel;
+    private final String idCard;
 
-    public HistoryPanel(JPanel contentPanel) {
+    public HistoryPanel(JPanel contentPanel, String idCard) {
         this.contentPanel = contentPanel;
+        this.idCard = idCard;
     }
 
     /**
      * Fetches historical data from the database.
      *
-     * @return a two-dimensional Object array containing the history data.
+     * @param action
+     * @param result
      */
-    public static Object[][] fetchData() {
-        String selectSQL = "SELECT date, action, result FROM lich_su";
+//    nam
+    public static void insertRecord(String action, String result, String cardId) {
+        String insertSQL = "INSERT INTO lich_su (date, action, result, card_id) VALUES (?, ?, ?, ?)";
+
+        try (Connection connection = DriverManager.getConnection(url, user, password); 
+             PreparedStatement preparedStatement = connection.prepareStatement(insertSQL)) {
+
+            // Get current time and format
+            LocalDateTime now = LocalDateTime.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String formattedDate = now.format(formatter);
+
+            // Set values for prepared statement
+            preparedStatement.setString(1, formattedDate);
+            preparedStatement.setString(2, action);
+            preparedStatement.setString(3, result);
+            preparedStatement.setString(4, cardId);
+
+            // Execute the insertion
+            preparedStatement.executeUpdate();
+
+        } catch (SQLException e) {
+            System.err.println("Lỗi khi thêm bản ghi vào lịch sử: " + e.getMessage());
+            // You might want to re-throw a custom exception here for higher-level handling
+        }
+    }
+//    nam
+
+    public static Object[][] fetchData(String cardId) {
+        String selectSQL = "SELECT date, action, result FROM lich_su where card_id = ?";
         ArrayList<Object[]> dataList = new ArrayList<>();
 
-        try (Connection connection = DriverManager.getConnection(url, user, password);
-             PreparedStatement preparedStatement = connection.prepareStatement(selectSQL);
-             ResultSet resultSet = preparedStatement.executeQuery()) {
+        try (Connection connection = DriverManager.getConnection(url, user, password); 
+             PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
+                preparedStatement.setString(1, cardId);
+            try(ResultSet resultSet = preparedStatement.executeQuery()){
+                while (resultSet.next()) {
+                    Date date = resultSet.getDate("date");
+                    String action = resultSet.getString("action");
+                    String result = resultSet.getString("result");
 
-            while (resultSet.next()) {
-                Date date = resultSet.getDate("date");
-                String action = resultSet.getString("action");
-                String result = resultSet.getString("result");
-
-                dataList.add(new Object[]{
+                    dataList.add(new Object[]{
                         date != null ? date.toString() : "",
                         action != null ? action : "",
                         result != null ? result : ""
-                });
+                    });
+                }
             }
+            
         } catch (SQLException e) {
             System.err.println("Lỗi kết nối cơ sở dữ liệu: " + e.getMessage());
         }
@@ -69,7 +104,7 @@ public class HistoryPanel extends JPanel {
 
         // Table for History
         String[] columnNames = {"Ngày", "Hành động", "Kết quả"};
-        Object[][] data = fetchData();
+        Object[][] data = fetchData(idCard);
 
         JTable historyTable = new JTable(data, columnNames);
         JTableHeader tableHeader = historyTable.getTableHeader();
@@ -115,7 +150,7 @@ public class HistoryPanel extends JPanel {
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
-                                                        boolean hasFocus, int row, int column) {
+                boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
             c.setFont(new Font("Arial", Font.BOLD, 14));
             c.setForeground(Color.BLACK);

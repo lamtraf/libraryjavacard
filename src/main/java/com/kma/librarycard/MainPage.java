@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
 import javax.smartcardio.Card;
@@ -28,14 +30,13 @@ public final class MainPage extends JFrame {
     private final JPanel rightAppBar;
     private String validatedOtp = "";
 
-    static String url = "jdbc:mysql://localhost:3306/mysql";
+    static String url = "jdbc:mysql://localhost:3306/lib_javacard?zeroDateTimeBehavior=CONVERT_TO_NULL";
     static String user = "root";
     static String password = "";
 
     public void setValidatedOtp(String validatedOtp) {
         this.validatedOtp = validatedOtp;
     }
-
     public MainPage() {
         conn(); // Database connection
         setTitle("Trang chủ");
@@ -65,6 +66,26 @@ public final class MainPage extends JFrame {
 
         setVisible(true);
     }
+// thêm trườn balance lấy tron dataBase
+
+    private double getBalanceForDataBase(String cardID) {
+        double balance = 0.0;
+        String selectSQL = "SELECT balance FROM card_info WHERE card_id = ?";
+
+        try (Connection connection = DriverManager.getConnection(url, user, password); PreparedStatement preparedStatement = connection.prepareStatement(selectSQL)) {
+
+            preparedStatement.setString(1, cardID);
+            try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                if (resultSet.next()) {
+                    balance = resultSet.getDouble("balance");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi khi truy vấn số dư: " + e.getMessage());
+            // You might choose to throw a custom exception here to handle it on the call level
+        }
+        return balance;
+    }
 
     public void switchTab(String selectedMenu) {
         String infoCard = getInfoCard();
@@ -73,15 +94,16 @@ public final class MainPage extends JFrame {
         String addressCard = "";
         String phoneCard = "";
         String pinCard = "";
-        double balance = 12000;
+        Double balance = null;
         try {
             String[] parts = infoCard.split("\u0003");
+            System.out.println(Arrays.toString(parts));
             if (parts.length == 4) {
                 idCard = parts[0];
                 nameCard = parts[1];
                 addressCard = parts[2];
                 phoneCard = parts[3];
-
+                balance = getBalanceForDataBase(idCard);
             } else {
                 throw new IllegalArgumentException("Dữ liệu thẻ không hợp lệ: số lượng phần tử không đúng.");
             }
@@ -107,22 +129,22 @@ public final class MainPage extends JFrame {
                     profilePanel.show();
                 }
                 case "Trang chủ" -> {
-                    DashboardPanel dashboardPanel = new DashboardPanel(contentPanel);
+                    DashboardPanel dashboardPanel = new DashboardPanel(contentPanel,balance);
                     dashboardPanel.show();
                 }
                 case "Mượn trả sách" -> {
                     // Create a dummy ProfilePanel instance.
-                    ProfilePanel profilePanel = new ProfilePanel(contentPanel, "12345", "Test Name", "Test Address", "1234567890", "1234", balance, this); // Pass this if MainPage is not null
+                    ProfilePanel profilePanel = new ProfilePanel(contentPanel, idCard, nameCard, addressCard, phoneCard, validatedOtp, balance, this); // Pass this if MainPage is not null
                     BorrowReturnPanel borrowReturnPanel = new BorrowReturnPanel(contentPanel, profilePanel);
                     borrowReturnPanel.show();
                 }
                 case "Sách quá hạn" -> {
-                    ProfilePanel profilePanel = new ProfilePanel(contentPanel, "12345", "Test Name", "Test Address", "1234567890", "1234", balance, this); // Pass this if MainPage is not null
+                    ProfilePanel profilePanel = new ProfilePanel(contentPanel, idCard, nameCard, addressCard, phoneCard, validatedOtp, balance, this); // Pass this if MainPage is not null
                     PaymentPanel paymentPanel = new PaymentPanel(contentPanel, profilePanel, balance); // Thay vì chỉ có contentPanel
                     paymentPanel.show();
                 }
                 case "Lịch sử hoạt động" -> {
-                    HistoryPanel historyPanel = new HistoryPanel(contentPanel);
+                    HistoryPanel historyPanel = new HistoryPanel(contentPanel,idCard);
                     historyPanel.show();
                 }
                 default -> {
@@ -145,7 +167,7 @@ public final class MainPage extends JFrame {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             connection = DriverManager.getConnection(url, user, password);
-            System.out.println("Kết nối thành công!");
+            System.out.println("Kết nối database thành công!");
         } catch (ClassNotFoundException e) {
             System.out.println(e);
             System.err.println("Lỗi: Không tìm thấy driver JDBC. " + e.getMessage());
@@ -155,6 +177,7 @@ public final class MainPage extends JFrame {
         }
         return connection;
     }
+
     private String getInfoCard() {
         String chuoiByte = "";
         try {

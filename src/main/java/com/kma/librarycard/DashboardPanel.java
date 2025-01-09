@@ -10,19 +10,26 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Locale;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.JTableHeader;
 
 public class DashboardPanel extends JPanel {
 
     private final JPanel contentPanel;
-
-    public DashboardPanel(JPanel contentPanel) {
+    private final double balance;
+    public DashboardPanel(JPanel contentPanel,double balance) {
         this.contentPanel = contentPanel;
+        this.balance = balance;
     }
 
+    private String formatBalance(double balance) {
+        NumberFormat numberFormat = NumberFormat.getNumberInstance(Locale.getDefault());
+        return numberFormat.format(balance); // Format with commas
+    }
     public static Object[][] fetchBookData() {
         String selectSQL = "SELECT name, ngay_muon, ngay_tra, status FROM SACH_MUON_TRA";
         ArrayList dataList = new ArrayList(); // Không sử dụng generic
@@ -53,18 +60,19 @@ public class DashboardPanel extends JPanel {
         // Create dashboard panel
         JPanel dashboardPanel = new JPanel(new GridLayout(1, 4, 30, 10));
         dashboardPanel.setBorder(BorderFactory.createEmptyBorder(10, 25, 10, 10));
-
-        // Labels for the dashboard boxes
+        Object[][] bookDataList = fetchBookData();
+        int borrowedBookCount = bookDataList.length;
+        String balanceFormatted = formatBalance(balance); 
         JLabel box1 = new JLabel("<html><div style='text-align: center;'>"
                 + "<p style='vertical-align: middle;margin-bottom:4px'>"
                 + "<img src='" + getClass().getResource("/image/Books-3d-icon.png") + "' width='50' height='50' /></p>"
                 + "<span style='display: inline-block; vertical-align: middle;'>"
-                + "Tổng số sách đang mượn<br>= 0</span></div></html>");
+                + "Tổng số sách đang mượn<br>= " + borrowedBookCount + "</span></div></html>");
         JLabel box2 = new JLabel("<html><div style='text-align: center;'>"
                 + "<p style='vertical-align: middle;margin-bottom:4px'>"
                 + "<img src='" + getClass().getResource("/image/wallet-icon.png") + "' width='50' height='50' /></p>"
                 + "<span style='display: inline-block; vertical-align: middle;'>"
-                + "Số dư phí<br>0 vnđ</span></div></html>");
+                + "Số dư phí<br>" + balanceFormatted + " vnđ</span></div></html>");
         JLabel box3 = new JLabel("<html><div style='text-align: center;'>"
                 + "<p style='vertical-align: middle;margin-bottom:4px'>"
                 + "<img src='" + getClass().getResource("/image/Status-media-playlist-repeat-icon.png") + "' width='50' height='50' /></p>"

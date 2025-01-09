@@ -1,15 +1,33 @@
 package com.kma.librarycard;
 
 import com.kma.librarycard.MainPage;
+import static com.kma.librarycard.MainPage.password;
+import static com.kma.librarycard.MainPage.url;
+import static com.kma.librarycard.MainPage.user;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
+import java.awt.event.ItemEvent;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.RSAPublicKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.sql.Connection;
+import java.sql.Date;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -228,7 +246,6 @@ public class ProfilePanel extends JPanel {
 
             // Chèn mảng byte vào và thêm dấu phân cách 0x03
             int currentIndex = 0;
-            combinedBytes[currentIndex++] = 0x03; // Dấu phân cách
 
             System.arraycopy(userNameBytes, 0, combinedBytes, currentIndex, userNameBytes.length);
             currentIndex += userNameBytes.length;
@@ -246,7 +263,6 @@ public class ProfilePanel extends JPanel {
 
             System.out.println("aa");
 
-            // Tạo lệnh APDU mở rộng để ghi dữ liệu ngày sinh
             CommandAPDU updateCommand = new CommandAPDU(0xA4, 0x11, 0x00, 0x00, combinedBytes, 0x00);
 
             // Gửi lệnh đến thẻ
@@ -289,7 +305,7 @@ public class ProfilePanel extends JPanel {
         if (infoIMGbyte.length > 0) {
             try {
                 ImageIcon icon = new ImageIcon(infoIMGbyte);
-                ImageIcon resizedIcon = resizeImageIcon(icon, avatarLabel.getWidth() - 10, avatarLabel.getHeight() - 10);
+                ImageIcon resizedIcon = resizeImageIcon(icon, 100, 120);
                 if (resizedIcon != null) {
                     avatarLabel.setIcon(resizedIcon);
                     avatarLabel.setText("");
@@ -387,6 +403,7 @@ public class ProfilePanel extends JPanel {
                             avatarLabel.setIcon(resizedIcon);
                             avatarLabel.setText("");
                         }
+                        HistoryPanel.insertRecord("Thay đổi ảnh", "Thành công", card_id);
                         changeImage(img);
                     }
                 } catch (Exception ex) {
@@ -440,8 +457,7 @@ public class ProfilePanel extends JPanel {
         infoGbc.anchor = GridBagConstraints.CENTER;
         infoPanel.add(updateButton, infoGbc);
         updateButton.addActionListener(e -> {
-            
-            
+
 //             byte[] infoIMGbyte = getImage();
 //    if (infoIMGbyte.length > 0) {
 //        try {
@@ -457,8 +473,6 @@ public class ProfilePanel extends JPanel {
 //        }
 //    }
 //            
-            
-            
             JDialog updateDialog = new JDialog((Frame) null, "Cập nhật thông tin", true);
             updateDialog.setLayout(new GridBagLayout());
             GridBagConstraints dialogGbc = new GridBagConstraints();
@@ -552,6 +566,7 @@ public class ProfilePanel extends JPanel {
                 String correctOtp = validatedOtp; // Đây là mã OTP giả định, thay bằng mã thực tế của bạn
                 if (!updatedPin.equals(correctOtp)) {
                     JOptionPane.showMessageDialog(updateDialog, "Mã pin không chính xác.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    HistoryPanel.insertRecord("Cập nhật thông tin", "Thất bại", card_id);
                     return;
                 }
                 try {
@@ -574,7 +589,19 @@ public class ProfilePanel extends JPanel {
                     JOptionPane.showMessageDialog(updateDialog, "Lỗi khi đọc Public Key từ thẻ: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                saveToDatabaseInformation(card_id, pubkeys, updatedName, updatedAddress, updatedPhone);
+//                nam 
+                byte[] card_ID = null;
+                try {
+                    card_ID = getCardID();
+
+                } catch (CardException ex) {
+                    Logger.getLogger(ProfilePanel.class.getName()).log(Level.SEVERE, null, ex);
+                    JOptionPane.showMessageDialog(updateDialog, "Lỗi khi đọc Public Key từ thẻ: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                HistoryPanel.insertRecord("Cập nhật thông tin", "Thành công", card_id);
+//nam           
+                saveToDatabaseInformation(card_ID, pubkeys);
                 updateDialog.dispose();
             });
 
@@ -616,6 +643,8 @@ public class ProfilePanel extends JPanel {
         changePinButton.addActionListener(e -> {
             showChangePinDialog();
         });
+
+        button2.addActionListener(e -> showValidationDialog());
 
         profilePanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         contentPanel.removeAll();
@@ -713,6 +742,7 @@ public class ProfilePanel extends JPanel {
                 validatedOtp = newOtp;
                 mainPage.setValidatedOtp(validatedOtp);
                 mainPage.changePin(oldOtp, newOtp);
+                HistoryPanel.insertRecord("Thay đổi mã pin", "Thành công", card_id);
                 changePinDialog.dispose();
             }
             oldOtpField.setText("");
@@ -723,38 +753,323 @@ public class ProfilePanel extends JPanel {
         changePinDialog.setLocationRelativeTo(null);
         changePinDialog.setVisible(true);
     }
+//nam update
 
-    private static void saveToDatabaseInformation(String id_card, byte[] pubkeys, String fullname, String address, String phone) {
-        String url = "jdbc:mysql://localhost:3306/mysql";
+    private static void saveToDatabaseInformation(byte[] id_card, byte[] pubkeys) {
+        String url = "jdbc:mysql://localhost:3306/lib_javacard";
         String user = "root";
         String password = "";
-        String insertSQL = "INSERT INTO card_info (card_ID, publicKey, fullname, address, phone) VALUES (?, ?, ?, ?, ?)";
+        String cardIdString = null;
+        String publicKeyString = null;
 
-        try (java.sql.Connection connection = DriverManager.getConnection(url, user, password); java.sql.PreparedStatement preparedStatement = connection.prepareStatement(insertSQL)) {
-            String cardId = "";
-            String publicKey = "";
-            if (id_card != null) {
-                cardId = id_card;
-            }
-            if (pubkeys != null) {
-                publicKey = new String(pubkeys);
-            }
+        if (id_card != null) {
+            cardIdString = new String(id_card);
+        }
+        if (pubkeys != null) {
+            publicKeyString = new String(pubkeys);
+        }
 
-            preparedStatement.setString(1, cardId);
-            preparedStatement.setString(2, publicKey);
-            preparedStatement.setString(3, fullname);
-            preparedStatement.setString(4, address);
-            preparedStatement.setString(5, phone);
-            // Thực thi câu lệnh
-            int rowsAffected = preparedStatement.executeUpdate();
-            if (rowsAffected > 0) {
-                System.out.println("Lưu thông tin thành công.");
-            } else {
-                System.out.println("Không thể lưu thông tin vào cơ sở dữ liệu.");
+        if (cardIdString == null || cardIdString.isEmpty()) {
+            System.out.println("Card ID is null or empty. Cannot save to database.");
+            return;
+        }
+
+        try (java.sql.Connection connection = DriverManager.getConnection(url, user, password)) {
+            // Check if record with card_ID exists
+            String checkSQL = "SELECT COUNT(*) FROM card_info WHERE card_id = ?";
+            try (PreparedStatement checkStatement = connection.prepareStatement(checkSQL)) {
+                checkStatement.setString(1, cardIdString);
+                try (ResultSet resultSet = checkStatement.executeQuery()) {
+                    resultSet.next();
+                    int count = resultSet.getInt(1);
+                    if (count > 0) {
+                        // Update existing record
+                        String updateSQL = "UPDATE card_info SET pubkey = ? WHERE card_id = ?";
+                        try (PreparedStatement updateStatement = connection.prepareStatement(updateSQL)) {
+                            updateStatement.setString(1, publicKeyString);
+                            updateStatement.setString(2, cardIdString);
+                            int rowsAffected = updateStatement.executeUpdate();
+                            if (rowsAffected > 0) {
+                                System.out.println("Cập nhật thông tin thành công cho card_ID: " + cardIdString);
+                            } else {
+                                System.out.println("Không thể cập nhật thông tin cho card_ID: " + cardIdString);
+                            }
+                        }
+                    } else {
+                        // Insert new record
+                        String insertSQL = "INSERT INTO card_info (card_id, pubkey) VALUES (?, ?)";
+                        try (PreparedStatement insertStatement = connection.prepareStatement(insertSQL)) {
+                            insertStatement.setString(1, cardIdString);
+                            insertStatement.setString(2, publicKeyString);
+                            int rowsAffected = insertStatement.executeUpdate();
+                            if (rowsAffected > 0) {
+                                System.out.println("Lưu thông tin thành công cho card_ID: " + cardIdString);
+                            } else {
+                                System.out.println("Không thể lưu thông tin cho card_ID: " + cardIdString);
+                            }
+                        }
+                    }
+                }
             }
-        } catch (java.sql.SQLException e) {
+        } catch (SQLException e) {
             System.out.println("Lỗi kết nối cơ sở dữ liệu: " + e.getMessage());
-            e.printStackTrace();
         }
     }
+//   nam update
+
+    private void showValidationDialog() {
+        JDialog validationDialog = new JDialog((Frame) null, "Xác thực người dùng", true);
+        validationDialog.setSize(300, 200);
+        validationDialog.setLayout(new FlowLayout());
+
+        // Checkbox để thực hiện xác thực
+        JCheckBox rsaCheckbox = new JCheckBox("Bạn đang muốn thanh toán?");
+        rsaCheckbox.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                boolean isValid = validateCardWithRSA();
+                if (isValid) {
+                    rsaCheckbox.setText("Validation Successful");
+                    rsaCheckbox.setEnabled(false);
+                    showRenewalDialog(); // Hiển thị giao diện gia hạn thẻ
+                    validationDialog.dispose(); // Đóng hộp thoại hiện tại
+                } else {
+                    rsaCheckbox.setText("Validation Failed");
+                    rsaCheckbox.setForeground(Color.RED);
+                }
+            }
+        });
+
+        validationDialog.add(rsaCheckbox);
+        validationDialog.setLocationRelativeTo(this);
+        validationDialog.setVisible(true);
+    }
+
+    private BigInteger getModulusPublicKey() throws CardException {
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        if (terminals.list().isEmpty()) {
+            System.out.println("Không tìm thấy trình đọc thẻ.");
+            return null;
+        }
+
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=1");
+        CardChannel channel = card.getBasicChannel();
+
+        CommandAPDU getPubKeyCommand = new CommandAPDU(0xA4, 0x1A, 0x01, 0x01);
+        ResponseAPDU response = channel.transmit(getPubKeyCommand);
+
+        if (response.getSW() == 0x9000) {
+            BigInteger res = new BigInteger(1, response.getData());
+            System.out.println("responseM " + res);
+            return res;
+        } else {
+            System.out.println("Không lấy được Public Key từ thẻ.");
+            return null;
+        }
+    }
+
+    private BigInteger getExponentPublicKey() throws CardException {
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        if (terminals.list().isEmpty()) {
+            System.out.println("Không tìm thấy trình đọc thẻ.");
+            return null;
+        }
+
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=1");
+        CardChannel channel = card.getBasicChannel();
+
+        CommandAPDU getPubKeyCommand = new CommandAPDU(0xA4, 0x1A, 0x02, 0x01);
+        ResponseAPDU response = channel.transmit(getPubKeyCommand);
+
+        if (response.getSW() == 0x9000) {
+            BigInteger res = new BigInteger(1, response.getData());
+            System.out.println("responseE " + res);
+            return res;
+        } else {
+            System.out.println("Không lấy được Public Key từ thẻ.");
+            return null;
+        }
+    }
+
+    private boolean validateCardWithRSA() {
+        try {
+            // Khởi tạo kết nối với đầu đọc thẻ
+            TerminalFactory factory = TerminalFactory.getDefault();
+            CardTerminals terminals = factory.terminals();
+            if (terminals.list().isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            CardTerminal terminal = terminals.list().get(0);
+            Card card = terminal.connect("T=1");
+            CardChannel channel = card.getBasicChannel();
+
+            // Lấy mô-đun và số mũ công khai
+            BigInteger modulusPubkey = getModulusPublicKey();
+            BigInteger exponentPubkey = getExponentPublicKey();
+
+            System.out.println("PublicKey Modulus (N): " + modulusPubkey);
+            System.out.println("PublicKey Exponent (E): " + exponentPubkey);
+
+            // Tạo PublicKey từ modulus và exponent
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            RSAPublicKeySpec pubKeySpec = new RSAPublicKeySpec(modulusPubkey, exponentPubkey);
+            PublicKey public_Key = keyFactory.generatePublic(pubKeySpec);
+
+            // Tạo chuỗi ngẫu nhiên để xác thực
+            byte[] randomData = new byte[16]; // Chuỗi ngẫu nhiên 16 byte
+            new java.security.SecureRandom().nextBytes(randomData); // Sinh chuỗi ngẫu nhiên an toàn
+            System.out.println("Random Data (Input for Signing): " + randomData);
+
+            // Gửi chuỗi ngẫu nhiên để thẻ ký
+            CommandAPDU signCommand = new CommandAPDU(0xA4, 0x1B, 0x00, 0x00, randomData);
+            ResponseAPDU signResponse = channel.transmit(signCommand);
+
+            if (signResponse.getSW() != 0x9000) {
+                JOptionPane.showMessageDialog(null, "Không thể lấy chữ ký từ thẻ.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            byte[] signature = signResponse.getData();
+            System.out.println("Signature from Card: " + signature);
+
+            // Xác minh chữ ký
+            Signature rsaVerify = Signature.getInstance("SHA1withRSA");
+            rsaVerify.initVerify(public_Key);
+            rsaVerify.update(randomData);
+
+            if (rsaVerify.verify(signature)) {
+                JOptionPane.showMessageDialog(null, "Xác thực thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+                return true;
+            } else {
+                JOptionPane.showMessageDialog(null, "Xác thực thất bại.", "Thông báo", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Đã xảy ra lỗi: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private void showRenewalDialog() {
+        JDialog renewalDialog = new JDialog((Frame) null, "Gia hạn thẻ", true);
+        renewalDialog.setSize(400, 250);
+        renewalDialog.setLayout(new GridBagLayout());
+        renewalDialog.setResizable(false);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        JLabel messageLabel = new JLabel("Chọn thời gian gia hạn:");
+        messageLabel.setFont(new Font("Arial", Font.BOLD, 14));
+
+        JComboBox<String> renewalOptions = new JComboBox<>(new String[]{
+            "1 tháng - 50,000 VND",
+            "2 tháng - 100,000 VND",
+            "3 tháng - 150,000 VND",
+            "6 tháng - 300,000 VND",
+            "1 năm - 600,000 VND"
+        });
+
+        JButton confirmButton = new JButton("Xác nhận");
+        confirmButton.setPreferredSize(new Dimension(120, 40));
+        confirmButton.setBackground(new Color(0, 123, 255));
+        confirmButton.setForeground(Color.WHITE);
+        confirmButton.setFont(new Font("Arial", Font.BOLD, 14));
+
+        JButton cancelButton = new JButton("Hủy bỏ");
+        cancelButton.setPreferredSize(new Dimension(120, 40));
+        cancelButton.setBackground(Color.GRAY);
+        cancelButton.setForeground(Color.WHITE);
+        cancelButton.setFont(new Font("Arial", Font.BOLD, 14));
+
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
+        renewalDialog.add(messageLabel, gbc);
+
+        gbc.gridy = 1;
+        renewalDialog.add(renewalOptions, gbc);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        buttonPanel.add(confirmButton);
+        buttonPanel.add(cancelButton);
+
+        gbc.gridy = 2;
+        gbc.gridwidth = 2;
+        renewalDialog.add(buttonPanel, gbc);
+
+        confirmButton.addActionListener(e -> {
+            int selectedIndex = renewalOptions.getSelectedIndex();
+            int renewalCost = 0;
+            int renewalMonths = 0;
+
+            switch (selectedIndex) {
+                case 0 -> {
+                    renewalCost = 50000;
+                    renewalMonths = 1;
+                }
+                case 1 -> {
+                    renewalCost = 100000;
+                    renewalMonths = 2;
+                }
+                case 2 -> {
+                    renewalCost = 150000;
+                    renewalMonths = 3;
+                }
+                case 3 -> {
+                    renewalCost = 300000;
+                    renewalMonths = 6;
+                }
+                case 4 -> {
+                    renewalCost = 600000;
+                    renewalMonths = 12;
+                }
+            }
+
+            if (card_id != null) {
+                try (Connection connection = DriverManager.getConnection(url, user, password); PreparedStatement balanceQuery = connection.prepareStatement("SELECT balance FROM card_info WHERE card_id = ?"); PreparedStatement updateBalance = connection.prepareStatement("UPDATE card_info SET balance = balance - ?, renewal_date = CURRENT_DATE, expiry_date = DATE_ADD(expiry_date, INTERVAL ? MONTH) WHERE card_id = ?"); PreparedStatement insertHistory = connection.prepareStatement("INSERT INTO lich_su (card_id, action) VALUES (?, ?)")) {
+
+                    balanceQuery.setString(1, card_id);
+                    ResultSet rs = balanceQuery.executeQuery();
+
+                    if (rs.next()) {
+                        double currentBalance = rs.getDouble("balance");
+
+                        if (currentBalance >= renewalCost) {
+                            // Trừ tiền, cập nhật renewal_date và expiry_date
+                            updateBalance.setDouble(1, renewalCost);
+                            updateBalance.setInt(2, renewalMonths);
+                            updateBalance.setString(3, card_id);
+                            updateBalance.executeUpdate();
+
+                            // Thêm thông tin vào bảng lich_su
+                            String actionStatus = "Gia hạn " + renewalMonths + " tháng thành công";
+                            insertHistory.setString(1, card_id);
+                            insertHistory.setString(2, actionStatus);
+                            insertHistory.executeUpdate();
+
+                            JOptionPane.showMessageDialog(renewalDialog, "Gia hạn thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+                            renewalDialog.dispose();
+                        } else {
+                            JOptionPane.showMessageDialog(renewalDialog, "Số dư không đủ để gia hạn.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                } catch (SQLException ex) {
+                    JOptionPane.showMessageDialog(renewalDialog, "Đã xảy ra lỗi: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(renewalDialog, "Không tìm thấy thông tin thẻ.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        cancelButton.addActionListener(e -> renewalDialog.dispose());
+
+        renewalDialog.setLocationRelativeTo(null);
+        renewalDialog.setVisible(true);
+    }
+
 }
