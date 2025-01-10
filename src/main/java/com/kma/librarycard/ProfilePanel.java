@@ -818,29 +818,66 @@ public class ProfilePanel extends JPanel {
 //   nam update
 
     private void showValidationDialog() {
+        // Tạo dialog xác thực
         JDialog validationDialog = new JDialog((Frame) null, "Xác thực người dùng", true);
-        validationDialog.setSize(300, 200);
-        validationDialog.setLayout(new FlowLayout());
+        validationDialog.setSize(500, 250);
+        validationDialog.setLayout(new BorderLayout());
 
-        // Checkbox để thực hiện xác thực
-        JCheckBox rsaCheckbox = new JCheckBox("Bạn đang muốn thanh toán?");
+        // Panel phía trên chứa tiêu đề
+        JPanel headerPanel = new JPanel();
+        JLabel titleLabel = new JLabel("Xác thực người dùng");
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        headerPanel.add(titleLabel);
+
+        // Panel chính chứa checkbox
+        JPanel mainPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(30, 30, 30, 30); // Tăng khoảng cách giữa các phần tử
+
+// Tùy chỉnh kích thước của checkbox
+        JCheckBox rsaCheckbox = new JCheckBox("Bạn đang muốn thanh toán? Click tôi, hehe");
+        rsaCheckbox.setFont(new Font("Arial", Font.BOLD, 20)); // Tăng font chữ
+        rsaCheckbox.setPreferredSize(new Dimension(400, 100)); // Tăng kích thước tổng thể
+        rsaCheckbox.setIcon(new ImageIcon(new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB))); // Tăng kích thước icon
+        rsaCheckbox.setSelectedIcon(new ImageIcon(new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB)));
+
+// Thêm checkbox vào panel chính
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        mainPanel.add(rsaCheckbox, gbc);
+
+        // Thêm xử lý logic cho checkbox
         rsaCheckbox.addItemListener(e -> {
             if (e.getStateChange() == ItemEvent.SELECTED) {
                 boolean isValid = validateCardWithRSA();
                 if (isValid) {
-                    rsaCheckbox.setText("Validation Successful");
+                    rsaCheckbox.setText("Xác thực thành công");
+                    rsaCheckbox.setForeground(new Color(0, 128, 0));
                     rsaCheckbox.setEnabled(false);
-                    showRenewalDialog(); // Hiển thị giao diện gia hạn thẻ
-                    validationDialog.dispose(); // Đóng hộp thoại hiện tại
+                    showRenewalDialog();
+                    validationDialog.dispose();
                 } else {
-                    rsaCheckbox.setText("Validation Failed");
+                    rsaCheckbox.setText("Xác thực thất bại");
                     rsaCheckbox.setForeground(Color.RED);
                 }
             }
         });
 
-        validationDialog.add(rsaCheckbox);
-        validationDialog.setLocationRelativeTo(this);
+
+        // Panel dưới chứa nút "Đóng"
+        JPanel footerPanel = new JPanel();
+        JButton closeButton = new JButton("Đóng");
+        closeButton.setFont(new Font("Arial", Font.PLAIN, 14));
+        closeButton.addActionListener(e -> validationDialog.dispose());
+        footerPanel.add(closeButton);
+
+        // Thêm các panel vào dialog
+        validationDialog.add(headerPanel, BorderLayout.NORTH);
+        validationDialog.add(mainPanel, BorderLayout.CENTER);
+        validationDialog.add(footerPanel, BorderLayout.SOUTH);
+
+        validationDialog.setLocationRelativeTo(null);
         validationDialog.setVisible(true);
     }
 

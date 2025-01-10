@@ -58,7 +58,7 @@ public final class MainPage extends JFrame {
         contentPanel = new JPanel();
         contentPanel.setBackground(Color.WHITE);
         contentPanel.setLayout(new BorderLayout());
-        JLabel initialContent = new JLabel("Chào mừng! Hãy chọn một tab.");
+        JLabel initialContent = new JLabel("Chào mừng bạn đến với hệ thống quản lý thư viện! :).");
         initialContent.setHorizontalAlignment(SwingConstants.CENTER);
         initialContent.setFont(new Font("Arial", Font.BOLD, 20));
         contentPanel.add(initialContent, BorderLayout.CENTER);

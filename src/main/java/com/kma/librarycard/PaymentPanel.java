@@ -12,7 +12,25 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.awt.event.ActionEvent;
+import java.awt.event.ItemEvent;
+import java.awt.image.BufferedImage;
+import java.math.BigInteger;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.RSAPublicKeySpec;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.smartcardio.Card;
+import javax.smartcardio.CardChannel;
+import javax.smartcardio.CardException;
+import javax.smartcardio.CardTerminal;
+import javax.smartcardio.CardTerminals;
+import javax.smartcardio.CommandAPDU;
+import javax.smartcardio.ResponseAPDU;
+import javax.smartcardio.TerminalFactory;
 
 public class PaymentPanel extends JPanel {
 
@@ -21,11 +39,24 @@ public class PaymentPanel extends JPanel {
     private DefaultTableModel modelPayment;
     private final ProfilePanel profilePanel;
     private final double balance;
+    public String card_id = "";
 
     public PaymentPanel(JPanel contentPanel, ProfilePanel profilePanel, double balance) {
         this.contentPanel = contentPanel;
         this.profilePanel = profilePanel;
         this.balance = balance;
+        try {
+            byte[] cardIdBytes = getCardID();
+            if (cardIdBytes != null) {
+                this.card_id = new String(cardIdBytes);
+            } else {
+                this.card_id = "N/A";
+            }
+
+        } catch (CardException ex) {
+            this.card_id = "N/A";
+            Logger.getLogger(ProfilePanel.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     public static List<Object[]> fetchDataList(String cardID) {
@@ -183,7 +214,7 @@ public class PaymentPanel extends JPanel {
         });
 
         buttonRecharge.addActionListener((ActionEvent e) -> {
-            showRechargeDialog();
+            showValidationDialog();
         });
 
         // Add buttons to the button panel
@@ -267,8 +298,8 @@ public class PaymentPanel extends JPanel {
             }
             try {
                 double amount = Double.parseDouble(amountText);
-                if (amount <= 0) {
-                    JOptionPane.showMessageDialog(rechargeDialog, "Số tiền phải lớn hơn 0", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                if (amount <= 10000) {
+                    JOptionPane.showMessageDialog(rechargeDialog, "Số tiền phải lớn hơn 10.000 VND", "Lỗi", JOptionPane.ERROR_MESSAGE);
                     HistoryPanel.insertRecord("Nạp tiền", "Thất bại", profilePanel.card_id);
                     return;
                 }
@@ -332,6 +363,202 @@ public class PaymentPanel extends JPanel {
             c.setBackground(new Color(240, 240, 240));
             ((JLabel) c).setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
             return c;
+        }
+    }
+    private void showValidationDialog() {
+        // Tạo dialog xác thực
+        JDialog validationDialog = new JDialog((Frame) null, "Xác thực người dùng", true);
+        validationDialog.setSize(500, 250);
+        validationDialog.setLayout(new BorderLayout());
+
+        // Panel phía trên chứa tiêu đề
+        JPanel headerPanel = new JPanel();
+        JLabel titleLabel = new JLabel("Xác thực người dùng");
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        headerPanel.add(titleLabel);
+
+        // Panel chính chứa checkbox
+        JPanel mainPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(30, 30, 30, 30); // Tăng khoảng cách giữa các phần tử
+
+// Tùy chỉnh kích thước của checkbox
+        JCheckBox rsaCheckbox = new JCheckBox("Bạn đang muốn nạp tiền? Click tôi, hehe");
+        rsaCheckbox.setFont(new Font("Arial", Font.BOLD, 20)); // Tăng font chữ
+        rsaCheckbox.setPreferredSize(new Dimension(400, 100)); // Tăng kích thước tổng thể
+        rsaCheckbox.setIcon(new ImageIcon(new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB))); // Tăng kích thước icon
+        rsaCheckbox.setSelectedIcon(new ImageIcon(new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB)));
+
+// Thêm checkbox vào panel chính
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        mainPanel.add(rsaCheckbox, gbc);
+
+        // Thêm xử lý logic cho checkbox
+        rsaCheckbox.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                boolean isValid = validateCardWithRSA();
+                if (isValid) {
+                    rsaCheckbox.setText("Xác thực thành công");
+                    rsaCheckbox.setForeground(new Color(0, 128, 0));
+                    rsaCheckbox.setEnabled(false);
+                    showRechargeDialog();
+                    validationDialog.dispose();
+                } else {
+                    rsaCheckbox.setText("Xác thực thất bại");
+                    rsaCheckbox.setForeground(Color.RED);
+                }
+            }
+        });
+
+        // Panel dưới chứa nút "Đóng"
+        JPanel footerPanel = new JPanel();
+        JButton closeButton = new JButton("Đóng");
+        closeButton.setFont(new Font("Arial", Font.PLAIN, 14));
+        closeButton.addActionListener(e -> validationDialog.dispose());
+        footerPanel.add(closeButton);
+
+        // Thêm các panel vào dialog
+        validationDialog.add(headerPanel, BorderLayout.NORTH);
+        validationDialog.add(mainPanel, BorderLayout.CENTER);
+        validationDialog.add(footerPanel, BorderLayout.SOUTH);
+
+        validationDialog.setLocationRelativeTo(null);
+        validationDialog.setVisible(true);
+    }
+
+    private BigInteger getModulusPublicKey() throws CardException {
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        if (terminals.list().isEmpty()) {
+            System.out.println("Không tìm thấy trình đọc thẻ.");
+            return null;
+        }
+
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=1");
+        CardChannel channel = card.getBasicChannel();
+
+        CommandAPDU getPubKeyCommand = new CommandAPDU(0xA4, 0x1A, 0x01, 0x01);
+        ResponseAPDU response = channel.transmit(getPubKeyCommand);
+
+        if (response.getSW() == 0x9000) {
+            BigInteger res = new BigInteger(1, response.getData());
+            System.out.println("responseM " + res);
+            return res;
+        } else {
+            System.out.println("Không lấy được Public Key từ thẻ.");
+            return null;
+        }
+    }
+
+    private BigInteger getExponentPublicKey() throws CardException {
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        if (terminals.list().isEmpty()) {
+            System.out.println("Không tìm thấy trình đọc thẻ.");
+            return null;
+        }
+
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=1");
+        CardChannel channel = card.getBasicChannel();
+
+        CommandAPDU getPubKeyCommand = new CommandAPDU(0xA4, 0x1A, 0x02, 0x01);
+        ResponseAPDU response = channel.transmit(getPubKeyCommand);
+
+        if (response.getSW() == 0x9000) {
+            BigInteger res = new BigInteger(1, response.getData());
+            System.out.println("responseE " + res);
+            return res;
+        } else {
+            System.out.println("Không lấy được Public Key từ thẻ.");
+            return null;
+        }
+    }
+
+    private boolean validateCardWithRSA() {
+        try {
+            // Khởi tạo kết nối với đầu đọc thẻ
+            TerminalFactory factory = TerminalFactory.getDefault();
+            CardTerminals terminals = factory.terminals();
+            if (terminals.list().isEmpty()) {
+                JOptionPane.showMessageDialog(null, "Không tìm thấy trình đọc thẻ.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            CardTerminal terminal = terminals.list().get(0);
+            Card card = terminal.connect("T=1");
+            CardChannel channel = card.getBasicChannel();
+
+            // Lấy mô-đun và số mũ công khai
+            BigInteger modulusPubkey = getModulusPublicKey();
+            BigInteger exponentPubkey = getExponentPublicKey();
+
+            System.out.println("PublicKey Modulus (N): " + modulusPubkey);
+            System.out.println("PublicKey Exponent (E): " + exponentPubkey);
+
+            // Tạo PublicKey từ modulus và exponent
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            RSAPublicKeySpec pubKeySpec = new RSAPublicKeySpec(modulusPubkey, exponentPubkey);
+            PublicKey public_Key = keyFactory.generatePublic(pubKeySpec);
+
+            // Tạo chuỗi ngẫu nhiên để xác thực
+            byte[] randomData = new byte[16]; // Chuỗi ngẫu nhiên 16 byte
+            new java.security.SecureRandom().nextBytes(randomData); // Sinh chuỗi ngẫu nhiên an toàn
+            System.out.println("Random Data (Input for Signing): " + randomData);
+
+            // Gửi chuỗi ngẫu nhiên để thẻ ký
+            CommandAPDU signCommand = new CommandAPDU(0xA4, 0x1B, 0x00, 0x00, randomData);
+            ResponseAPDU signResponse = channel.transmit(signCommand);
+
+            if (signResponse.getSW() != 0x9000) {
+                JOptionPane.showMessageDialog(null, "Không thể lấy chữ ký từ thẻ.", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            byte[] signature = signResponse.getData();
+            System.out.println("Signature from Card: " + signature);
+
+            // Xác minh chữ ký
+            Signature rsaVerify = Signature.getInstance("SHA1withRSA");
+            rsaVerify.initVerify(public_Key);
+            rsaVerify.update(randomData);
+
+            if (rsaVerify.verify(signature)) {
+                JOptionPane.showMessageDialog(null, "Xác thực thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
+                return true;
+            } else {
+                JOptionPane.showMessageDialog(null, "Xác thực thất bại.", "Thông báo", JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Đã xảy ra lỗi: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    private static byte[] getCardID() throws CardException {
+        TerminalFactory factory = TerminalFactory.getDefault();
+        CardTerminals terminals = factory.terminals();
+        if (terminals.list().isEmpty()) {
+            System.out.println("Không tìm thấy trình đọc thẻ.");
+            return null;
+        }
+
+        CardTerminal terminal = terminals.list().get(0);
+        Card card = terminal.connect("T=1");
+        CardChannel channel = card.getBasicChannel();
+
+        CommandAPDU getCardIdCommand = new CommandAPDU(0xA4, 0x1D, 0x00, 0x00);
+        ResponseAPDU response = channel.transmit(getCardIdCommand);
+        if (response.getSW() == 0x9000) {
+            System.out.println("card_id:" + Arrays.toString(response.getData()));
+            return response.getData();
+        } else {
+            System.out.println("Không lấy được Card ID từ thẻ.");
+            return null;
         }
     }
 }
